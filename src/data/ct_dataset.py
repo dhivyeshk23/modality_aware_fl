@@ -5,6 +5,7 @@ GPU.
 """
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 
 import nibabel as nib
@@ -28,7 +29,8 @@ def list_ct_files(root: str | Path) -> list[tuple[Path, int]]:
     return samples
 
 
-def _load_volume(path: Path, size: int) -> torch.Tensor:
+@lru_cache(maxsize=64)
+def _load_volume(path: str, size: int) -> torch.Tensor:
     vol = nib.load(str(path)).get_fdata(dtype=np.float32)
     # Robust windowing: clip to the 1st-99th percentile range, then min-max normalize.
     lo, hi = np.percentile(vol, [1, 99])
@@ -50,5 +52,5 @@ class CTDataset(Dataset):
 
     def __getitem__(self, idx: int):
         path, label = self.samples[idx]
-        vol = _load_volume(path, self.size)
+        vol = _load_volume(str(path), self.size).clone()
         return vol, label

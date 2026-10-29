@@ -1,0 +1,44 @@
+sources:
+  montgomery_cxr:
+    local_path: datasets/MontgomerySet
+    role: CXR classifier client
+    source: NLM Montgomery County chest X-ray set
+    current_subset: 138 images; labels from filename suffix (0=normal, 1=TB)
+    license_status: verify terms in the supplied NLM readme before redistribution
+    distribute_data: false
+
+  shenzhen_cxr:
+    local_path: datasets/Shenzhen
+    role: CXR classifier client
+    source: Kaggle mirror raddar/tuberculosis-chest-xrays-shenzhen
+    current_subset: 662 images; labels from filename suffix (0=normal, 1=TB)
+    license_status: mirror reports unknown; verify original dataset terms before reuse
+    distribute_data: false
+
+  dryad_clinical:
+    local_path: datasets/doi_10_5061_dryad_280gb5n3f__v20251104/Genki_CAD_Evaluation_-_Dryad_Data.xlsx
+    citation: https://doi.org/10.5061/dryad.280gb5n3f
+    role: clinical/tabular client; no images are included in this workbook
+    current_cohort: 1466 de-identified adults; tb_status has 1408 negative and 58 positive records
+    license_status: follow the Dryad record and associated study terms
+    distribute_data: false
+
+  mycobacterial_ct:
+    local_path: datasets/ct_subset
+    source: Kaggle damianhan/nifti-dataset
+    citation: https://www.kaggle.com/datasets/damianhan/nifti-dataset
+    role: CT client; TB versus non-tuberculous mycobacteria classification
+    current_subset: 20 TB and 20 NTM NIfTI volumes
+    reported_dataset_license: CC BY 4.0; verify current Kaggle dataset terms
+    distribute_data: false
+
+excluded:
+  deeppulmotb:
+    reason: AES-encrypted archive; accompanying readme states release clearance from ImageCLEF is pending
+    used: false
+
+privacy_and_scope:
+  raw_health_data_in_repository: false
+  federation_mode: single-machine client simulation; no secure aggregation or differential privacy
+  cross_modal_patient_linkage: unavailable; source cohorts are unpaired
+  clinical_use: research prototype only; not validated for diagnosis or treatment decisions

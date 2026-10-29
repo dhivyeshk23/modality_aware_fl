@@ -5,6 +5,7 @@ Both datasets share the NLM naming convention `<id>_<label>.png` where label is
 """
 from __future__ import annotations
 
+from functools import lru_cache
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -34,11 +35,20 @@ def list_cxr_files(root: str | Path, source: str) -> list[tuple[Path, int]]:
 
 
 def build_transform(image_size: int, train: bool) -> transforms.Compose:
-    ops = [transforms.Grayscale(num_output_channels=3), transforms.Resize((image_size, image_size))]
+    ops = [transforms.Grayscale(num_output_channels=3)]
     if train:
         ops += [transforms.RandomHorizontalFlip(p=0.5), transforms.RandomRotation(degrees=7)]
     ops += [transforms.ToTensor(), transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD)]
     return transforms.Compose(ops)
+
+
+@lru_cache(maxsize=1024)
+def _load_resized_image(path: str, image_size: int) -> Image.Image:
+    with Image.open(path) as source:
+        image = source.convert("L")
+        return image.resize(
+            (image_size, image_size), Image.Resampling.BILINEAR, reducing_gap=3.0
+        )
 
 
 @dataclass
@@ -50,6 +60,7 @@ class CXRSample:
 class CXRDataset(Dataset):
     def __init__(self, samples: list[tuple[Path, int]], image_size: int = 224, train: bool = True):
         self.samples = samples
+        self.image_size = image_size
         self.transform = build_transform(image_size, train)
 
     def __len__(self) -> int:
@@ -57,6 +68,6 @@ class CXRDataset(Dataset):
 
     def __getitem__(self, idx: int):
         path, label = self.samples[idx]
-        img = Image.open(path).convert("L")
+        img = _load_resized_image(str(path), self.image_size).copy()
         img = self.transform(img)
         return img, label

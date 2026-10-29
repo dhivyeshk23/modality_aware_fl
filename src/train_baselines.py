@@ -22,7 +22,7 @@ import torch
 import yaml
 
 from src.federated.aggregate import weighted_average_state_dicts
-from src.federated.client import evaluate_client, local_train
+from src.federated.client import evaluate_client, evaluate_heldout_client, local_train
 from src.federated.server import FederatedServer
 from src.models.fusion import MODALITIES
 from src.models.model_factory import build_encoder, build_fusion
@@ -93,6 +93,14 @@ def run_plain_fedavg(clients, cfg, device) -> list[dict]:
         metrics = server.evaluate()
         history.append(summarize(r, metrics))
         print(f"[plain_fedavg][round {r:02d}] {history[-1]}")
+    history[-1]["test_per_client"] = {
+        client.name: evaluate_heldout_client(
+            client, server.global_encoders[client.modality], server.global_fusion,
+            server.embedding_dim, server.clinical_input_dim, device,
+        )
+        for client in clients
+    }
+    history[-1]["test_mean_client_balanced_accuracy"] = mean_test_balanced_accuracy(history[-1]["test_per_client"])
     return history
 
 
@@ -121,6 +129,14 @@ def run_local_only(clients, cfg, device) -> list[dict]:
         entry = summarize(r, {"per_client": results, "macro_accuracy": acc})
         history.append(entry)
         print(f"[local_only][round {r:02d}] {entry}")
+    history[-1]["test_per_client"] = {
+        client.name: evaluate_heldout_client(
+            client, local_encoders[client.name], local_fusions[client.name],
+            embedding_dim, clinical_dim, device,
+        )
+        for client in clients
+    }
+    history[-1]["test_mean_client_balanced_accuracy"] = mean_test_balanced_accuracy(history[-1]["test_per_client"])
     return history
 
 
@@ -135,9 +151,12 @@ def run_centralized(clients, cfg, device) -> list[dict]:
         enc.to(device)
     fusion.to(device)
 
+    for name, parameter in encoders["cxr"].backbone.named_parameters():
+        parameter.requires_grad = name.startswith("layer4")
+
     params = list(fusion.parameters())
     for enc in encoders.values():
-        params += list(enc.parameters())
+        params += [parameter for parameter in enc.parameters() if parameter.requires_grad]
     optimizer = torch.optim.Adam(params, lr=cfg["federated"]["lr"])
     criterion_by_client = {
         c.name: torch.nn.CrossEntropyLoss(
@@ -175,6 +194,14 @@ def run_centralized(clients, cfg, device) -> list[dict]:
         entry = summarize(r, {"per_client": results, "macro_accuracy": acc})
         history.append(entry)
         print(f"[centralized][round {r:02d}] {entry}")
+    history[-1]["test_per_client"] = {
+        client.name: evaluate_heldout_client(
+            client, encoders[client.modality].state_dict(), fusion.state_dict(),
+            embedding_dim, clinical_dim, device,
+        )
+        for client in clients
+    }
+    history[-1]["test_mean_client_balanced_accuracy"] = mean_test_balanced_accuracy(history[-1]["test_per_client"])
     return history
 
 
@@ -183,6 +210,11 @@ def summarize(round_idx: int, metrics: dict) -> dict:
         k: {"acc": round(v["accuracy"], 4), "f1": round(v["f1"], 4)} for k, v in metrics["per_client"].items()
     }
     return {"round": round_idx, "macro_accuracy": metrics["macro_accuracy"], "per_client": per_client}
+
+
+def mean_test_balanced_accuracy(per_client: dict) -> float:
+    values = [metrics["balanced_accuracy"] for metrics in per_client.values()]
+    return sum(values) / len(values) if values else 0.0
 
 
 _CLINICAL_DIM = None
@@ -210,7 +242,6 @@ def main() -> None:
     if args.rounds:
         cfg["federated"]["num_rounds"] = args.rounds
 
-    set_seed(cfg["seed"])
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
@@ -222,10 +253,13 @@ def main() -> None:
         with open(history_path) as f:
             all_history = json.load(f)
     if args.which in ("centralized", "all"):
+        set_seed(cfg["seed"])
         all_history["centralized"] = run_centralized(build_clients(cfg), cfg, device)
     if args.which in ("local_only", "all"):
+        set_seed(cfg["seed"])
         all_history["local_only"] = run_local_only(build_clients(cfg), cfg, device)
     if args.which in ("plain_fedavg", "all"):
+        set_seed(cfg["seed"])
         all_history["plain_fedavg"] = run_plain_fedavg(build_clients(cfg), cfg, device)
 
     with open(history_path, "w") as f:

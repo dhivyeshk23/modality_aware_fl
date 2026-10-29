@@ -19,6 +19,7 @@ from PIL import Image
 
 from src.data.clinical_dryad import FEATURE_COLUMNS
 from src.data.cxr_dataset import build_transform
+from src.data.image_quality import assess_cxr_quality
 from src.models.fusion import MODALITIES
 from src.models.model_factory import build_encoder, build_fusion
 
@@ -50,15 +51,24 @@ def mc_dropout_predict(encoder, fusion, modality: str, x: torch.Tensor, device, 
     return probs.mean(dim=0), probs.std(dim=0)
 
 
-def clinician_view(prob_mean: float, prob_std: float, modality: str) -> str:
-    return (
-        f"[Clinician view]\n"
-        f"  Modality used: {modality}\n"
-        f"  Estimated TB-positive probability: {prob_mean:.3f}\n"
-        f"  Model uncertainty (MC-Dropout std over 20 passes): {prob_std:.3f}\n"
-        f"  Note: single-modality input - treat as a screening signal, not a diagnosis.\n"
-        f"  Recommend confirmatory testing (e.g. Xpert MTB/RIF) regardless of score."
-    )
+def clinician_view(prob_mean: float, prob_std: float, modality: str, quality: dict | None = None) -> str:
+    lines = [
+        "[Clinician view]",
+        f"  Modality used: {modality}",
+        f"  Estimated TB-positive probability: {prob_mean:.3f}",
+        f"  Model uncertainty (MC-Dropout std over 20 passes): {prob_std:.3f}",
+    ]
+    if quality is not None:
+        flags = ", ".join(quality["warnings"]) or "no threshold flags"
+        lines.extend([
+            f"  Heuristic image-quality flags: {flags}",
+            f"  Contrast={quality['contrast_std']:.3f}; sharpness proxy={quality['sharpness_proxy']:.6f}",
+        ])
+    lines.extend([
+        "  Note: single-modality input - treat as a screening signal, not a diagnosis.",
+        "  Recommend confirmatory testing (e.g. Xpert MTB/RIF) regardless of score.",
+    ])
+    return "\n".join(lines)
 
 
 def patient_view(prob_mean: float, prob_std: float) -> str:
@@ -103,12 +113,13 @@ def main() -> None:
             raise SystemExit("--image is required for --modality cxr")
         transform = build_transform(cfg["image"]["cxr_size"], train=False)
         img = Image.open(args.image).convert("L")
+        quality = assess_cxr_quality(img, cfg["image"]["cxr_size"])
         x = transform(img).unsqueeze(0)
     else:
         raise SystemExit("this CLI currently only demos the cxr modality end-to-end")
 
     mean, std = mc_dropout_predict(encoder, fusion, args.modality, x, device)
-    print(clinician_view(mean.item(), std.item(), args.modality))
+    print(clinician_view(mean.item(), std.item(), args.modality, quality if args.modality == "cxr" else None))
     print()
     print(patient_view(mean.item(), std.item()))
 
