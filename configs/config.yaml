@@ -1,0 +1,46 @@
+seed: 42
+
+paths:
+  project_root: "."
+  montgomery_dir: "datasets/MontgomerySet"
+  shenzhen_dir: "datasets/Shenzhen"
+  dryad_xlsx: "datasets/doi_10_5061_dryad_280gb5n3f__v20251104/Genki_CAD_Evaluation_-_Dryad_Data.xlsx"
+  ct_subset_dir: "datasets/ct_subset"
+  checkpoints_dir: "checkpoints"
+  outputs_dir: "outputs"
+
+image:
+  cxr_size: 224
+  ct_size: 64 # resampled cubic volume size (fits 6GB VRAM)
+
+modalities: ["cxr", "clinical", "ct"]
+
+# Each "client" simulates one institution. modality says what data it holds -
+# this is the heterogeneous-modality-availability setup the project targets.
+clients:
+  - name: hospital_cxr_montgomery
+    modality: cxr
+    source: montgomery
+  - name: hospital_cxr_shenzhen
+    modality: cxr
+    source: shenzhen
+  - name: hospital_clinical_a
+    modality: clinical
+    source: dryad
+    split: a
+  - name: hospital_clinical_b
+    modality: clinical
+    source: dryad
+    split: b
+  - name: hospital_ct
+    modality: ct
+    source: ct_subset
+
+federated:
+  num_rounds: 15
+  local_epochs: 1
+  lr: 0.0003
+  batch_size: 16
+  client_fraction: 1.0
+
+embedding_dim: 128
