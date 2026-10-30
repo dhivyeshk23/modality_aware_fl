@@ -29,7 +29,7 @@ EMBED = 32
 SEEDS = (0, 1, 2, 3, 4)
 
 
-def make_patients(n: int, rng: np.random.Generator) -> tuple[dict[str, torch.Tensor], torch.Tensor]:
+def make_patients(n: int, rng: np.random.Generator, noise: float = 0.6) -> tuple[dict[str, torch.Tensor], torch.Tensor]:
     labels = rng.integers(0, 2, size=n)
     sign = (2 * labels - 1)[:, None]
     data = {}
@@ -37,7 +37,7 @@ def make_patients(n: int, rng: np.random.Generator) -> tuple[dict[str, torch.Ten
         direction = np.random.default_rng(DIMS[modality]).normal(size=dim)
         direction /= np.linalg.norm(direction)
         data[modality] = torch.tensor(
-            sign * SIGNAL[modality] * direction + rng.normal(size=(n, dim)) * 0.6, dtype=torch.float32
+            sign * SIGNAL[modality] * direction + rng.normal(size=(n, dim)) * noise, dtype=torch.float32
         ).float()
     return data, torch.tensor(labels)
 
