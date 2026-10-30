@@ -8,6 +8,7 @@ datasets/*
 *.dcm
 outputs/
 checkpoints/
+ppt/
 *.pt
 *.pth
 .ipynb_checkpoints/
