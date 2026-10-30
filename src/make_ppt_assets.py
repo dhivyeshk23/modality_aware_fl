@@ -42,7 +42,11 @@ def metrics_table(seeds) -> None:
         row = [label]
         for metric, _ in METRICS:
             per_seed = [
-                np.nanmean([s["methods"][key]["test_per_client"][c][metric] or np.nan for c, _ in CLIENTS])
+                np.nanmean([
+                    np.nan if s["methods"][key]["test_per_client"][c][metric] is None
+                    else s["methods"][key]["test_per_client"][c][metric]
+                    for c, _ in CLIENTS
+                ])
                 for s in seeds
             ]
             row.append(f"{np.mean(per_seed):.3f} ± {np.std(per_seed):.3f}")
@@ -53,6 +57,7 @@ def metrics_table(seeds) -> None:
     table.auto_set_font_size(False)
     table.set_fontsize(9)
     table.scale(1, 1.8)
+    table.auto_set_column_width(list(range(len(METRICS) + 1)))
     for column in range(len(METRICS) + 1):
         table[0, column].set_facecolor("#1f4a7c")
         table[0, column].set_text_props(color="white", fontweight="bold")
